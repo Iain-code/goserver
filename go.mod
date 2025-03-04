@@ -1,3 +1,3 @@
-module GOClient
+module goserver
 
 go 1.22.4
