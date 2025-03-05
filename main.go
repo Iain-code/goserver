@@ -36,7 +36,9 @@ func main() {
 	wrappedFileServer := http.StripPrefix("/app/", fileServer) // removes the app prefix from the URL then passes the request to fileServer
 	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(wrappedFileServer))
 	mux.HandleFunc("GET /api/healthz", handler.ServerReady)
-	mux.HandleFunc("POST /api/validate_chirp", handler.Validate)
+	mux.HandleFunc("POST /api/chirps", apiCfg.Chirps)
+	mux.HandleFunc("GET /api/chirps", apiCfg.GetAllChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetOneChirp)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.Counter)
 	mux.HandleFunc("POST /admin/reset", apiCfg.Reset)
 	mux.HandleFunc("POST /api/users", apiCfg.NewUser)
