@@ -82,5 +82,54 @@ func (apiCfg *ApiConfig) NewUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
 	w.Write(data)
+}
+
+func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
+
+	type User struct {
+		ID             uuid.UUID      `json:"id"`
+		CreatedAt      time.Time      `json:"created_at"`
+		UpdatedAt      time.Time      `json:"updated_at"`
+		Email          string         `json:"email"`
+		HashedPassword sql.NullString `json:"hashed_password"`
+	}
+
+	type inputData struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	user := User{}
+	input := inputData{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&input)
+
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	data, err := apiCfg.Db.FindUserEmail(r.Context(), input.Email)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	user.ID = data.ID
+	if data.CreatedAt.Valid {
+		user.CreatedAt = data.CreatedAt.Time
+	}
+	if data.UpdatedAt.Valid {
+		user.UpdatedAt = data.UpdatedAt.Time
+	}
+	user.Email = data.Email
+	user.HashedPassword = data.HashedPassword
+
+	err = auth.CheckPasswordHash(input.Password, user.HashedPassword.String)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	} else {
+		respondWithJSON(w, 200, user)
+	}
 
 }
