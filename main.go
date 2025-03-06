@@ -14,7 +14,7 @@ import (
 
 func main() {
 
-	godotenv.Load()
+	godotenv.Load() // load env file
 	dbURL := os.Getenv("DB_URL")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -27,6 +27,7 @@ func main() {
 	apiCfg := &handler.ApiConfig{}
 	apiCfg.Db = dbQueries
 	apiCfg.Platform = os.Getenv("PLATFORM")
+	apiCfg.TokenSecret = os.Getenv("TOKEN_SECRET")
 
 	srv := &http.Server{
 		Addr:    ":" + port,

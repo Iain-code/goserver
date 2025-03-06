@@ -91,27 +91,29 @@ func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		CreatedAt      time.Time      `json:"created_at"`
 		UpdatedAt      time.Time      `json:"updated_at"`
 		Email          string         `json:"email"`
-		HashedPassword sql.NullString `json:"hashed_password"`
+		HashedPassword sql.NullString `json:"-"`
+		Token          string         `json:"token"`
 	}
 
-	type inputData struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+	type received struct {
+		Password           string        `json:"password"`
+		Email              string        `json:"email"`
+		Expires_in_seconds time.Duration `json:"optional_field,expires_in_seconds"`
 	}
 
 	user := User{}
-	input := inputData{}
+	receivedData := received{}
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&input)
+	err := decoder.Decode(&receivedData)
 
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	data, err := apiCfg.Db.FindUserEmail(r.Context(), input.Email)
+	data, err := apiCfg.Db.FindUserEmail(r.Context(), receivedData.Email)
 	if err != nil {
-		respondWithError(w, 401, "Unauthorized")
+		respondWithError(w, 401, "Unauthorized 1")
 		return
 	}
 	user.ID = data.ID
@@ -122,14 +124,27 @@ func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		user.UpdatedAt = data.UpdatedAt.Time
 	}
 	user.Email = data.Email
-	user.HashedPassword = data.HashedPassword
 
-	err = auth.CheckPasswordHash(input.Password, user.HashedPassword.String)
+	err = auth.CheckPasswordHash(receivedData.Password, data.HashedPassword.String)
 	if err != nil {
-		respondWithError(w, 401, "Unauthorized")
+		respondWithError(w, 401, "Unauthorized 2")
 		return
-	} else {
-		respondWithJSON(w, 200, user)
 	}
 
+	if receivedData.Expires_in_seconds > time.Duration(1)*time.Hour || receivedData.Expires_in_seconds == 0 {
+		receivedData.Expires_in_seconds = time.Duration(1) * time.Hour
+	}
+
+	tokenstr, err := auth.MakeJWT(user.ID, apiCfg.TokenSecret, receivedData.Expires_in_seconds)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized 3")
+		return
+	}
+	ID, err := auth.ValidateJWT(tokenstr, apiCfg.TokenSecret)
+	if ID != user.ID {
+		respondWithError(w, 401, "Unauthorized 4")
+		return
+	}
+	user.Token = tokenstr
+	respondWithJSON(w, 200, user)
 }

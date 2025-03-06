@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"goserver/internal/auth"
 	"goserver/internal/database"
 	"net/http"
 	"strings"
@@ -15,14 +16,7 @@ type ApiConfig struct {
 	Db             *database.Queries
 	fileserverHits atomic.Int32
 	Platform       string
-}
-
-func ServerReady(responseWriter http.ResponseWriter, req *http.Request) {
-
-	responseWriter.Header().Set("Content-Type", "text/plain; charset=utf-8") // sets the header of responseWriteer
-	responseWriter.WriteHeader(200)
-	s := []byte("OK")
-	responseWriter.Write(s)
+	TokenSecret    string
 }
 
 func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +47,20 @@ func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, "chirp is too long")
 		return
 	}
+
+	headers := r.Header
+	token, err := auth.GetBearerToken(headers)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	ID, err := auth.ValidateJWT(token, apiCfg.TokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	cleanedText := badWordReplacement(post.Body)
 
 	chirps := database.CreateChirpParams{}
@@ -61,7 +69,7 @@ func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 	chirps.UpdatedAt = time.Now()
 	chirps.Body = cleanedText
 	chirps.UserID = uuid.NullUUID{
-		UUID:  post.UserID,
+		UUID:  ID,
 		Valid: true,
 	}
 
@@ -78,34 +86,6 @@ func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 	chirp.UserID = data.UserID
 
 	respondWithJSON(w, 201, chirp)
-
-}
-
-func respondWithError(w http.ResponseWriter, code int, msg string) {
-
-	type ErrorResponse struct {
-		Error string `json:"error"`
-	}
-
-	errResp := ErrorResponse{}
-	errResp.Error = msg
-	data, _ := json.Marshal(errResp)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(data)
-}
-
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		respondWithError(w, 500, "Error marshalling JSON")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(data)
 
 }
 
