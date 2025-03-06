@@ -14,19 +14,7 @@ import (
 
 func (apiCfg *ApiConfig) NewUser(w http.ResponseWriter, r *http.Request) {
 
-	type User struct {
-		ID             uuid.UUID      `json:"id"`
-		CreatedAt      time.Time      `json:"created_at"`
-		UpdatedAt      time.Time      `json:"updated_at"`
-		Email          string         `json:"email"`
-		HashedPassword sql.NullString `json:"hashed_password"`
-	}
-
-	type Email struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
-	}
-	email := Email{}
+	email := received{}
 
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&email)
@@ -61,7 +49,7 @@ func (apiCfg *ApiConfig) NewUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	userStruct := User{}
+	userStruct := &User{}
 	userStruct.ID = newUser.ID
 	userStruct.Email = newUser.Email
 	userStruct.HashedPassword = newUser.HashedPassword
@@ -86,65 +74,75 @@ func (apiCfg *ApiConfig) NewUser(w http.ResponseWriter, r *http.Request) {
 
 func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 
-	type User struct {
-		ID             uuid.UUID      `json:"id"`
-		CreatedAt      time.Time      `json:"created_at"`
-		UpdatedAt      time.Time      `json:"updated_at"`
-		Email          string         `json:"email"`
-		HashedPassword sql.NullString `json:"-"`
-		Token          string         `json:"token"`
+	type TokenUser struct {
+		ID           uuid.UUID `json:"id"`
+		CreatedAt    time.Time `json:"created_at"`
+		UpdatedAt    time.Time `json:"updated_at"`
+		Email        string    `json:"email"`
+		Token        string    `json:"token"`
+		RefreshToken string    `json:"refresh_token"`
 	}
 
-	type received struct {
-		Password           string        `json:"password"`
-		Email              string        `json:"email"`
-		Expires_in_seconds time.Duration `json:"optional_field,expires_in_seconds"`
-	}
-
-	user := User{}
 	receivedData := received{}
+
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&receivedData)
-
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	// FIND THE USERS DATA USING THE EMAIL IN JSON REQUEST
+
 	data, err := apiCfg.Db.FindUserEmail(r.Context(), receivedData.Email)
 	if err != nil {
-		respondWithError(w, 401, "Unauthorized 1")
+		respondWithError(w, 401, "Unauthorized")
 		return
 	}
-	user.ID = data.ID
-	if data.CreatedAt.Valid {
-		user.CreatedAt = data.CreatedAt.Time
-	}
-	if data.UpdatedAt.Valid {
-		user.UpdatedAt = data.UpdatedAt.Time
-	}
-	user.Email = data.Email
 
 	err = auth.CheckPasswordHash(receivedData.Password, data.HashedPassword.String)
 	if err != nil {
-		respondWithError(w, 401, "Unauthorized 2")
+		respondWithError(w, 401, "Unauthorized")
 		return
 	}
 
-	if receivedData.Expires_in_seconds > time.Duration(1)*time.Hour || receivedData.Expires_in_seconds == 0 {
-		receivedData.Expires_in_seconds = time.Duration(1) * time.Hour
-	}
-
-	tokenstr, err := auth.MakeJWT(user.ID, apiCfg.TokenSecret, receivedData.Expires_in_seconds)
+	refreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
-		respondWithError(w, 401, "Unauthorized 3")
+		respondWithError(w, 500, "refresh token failed")
 		return
 	}
+	RefreshTokenParams := database.MakeRefreshTokenParams{}
+	RefreshTokenParams.Token = refreshToken
+	RefreshTokenParams.ExpiresAt.Time = time.Now().Add(60 * 24 * time.Hour)
+	RefreshTokenParams.ExpiresAt.Valid = true
+	RefreshTokenParams.CreatedAt = time.Now()
+	RefreshTokenParams.UpdatedAt = time.Now()
+	RefreshTokenParams.UserID = data.ID
+	err = apiCfg.Db.MakeRefreshToken(r.Context(), RefreshTokenParams)
+	if err != nil {
+		respondWithError(w, 500, "error making refresh token")
+		return
+	}
+
+	tokenstr, err := auth.MakeJWT(data.ID, apiCfg.TokenSecret, time.Hour*1)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	ID, err := auth.ValidateJWT(tokenstr, apiCfg.TokenSecret)
-	if ID != user.ID {
-		respondWithError(w, 401, "Unauthorized 4")
+	if ID != data.ID {
+		respondWithError(w, 401, "Unauthorized")
 		return
 	}
-	user.Token = tokenstr
-	respondWithJSON(w, 200, user)
+
+	refreshTokenStruct := TokenUser{}
+	refreshTokenStruct.ID = data.ID
+	refreshTokenStruct.CreatedAt = RefreshTokenParams.CreatedAt
+	refreshTokenStruct.UpdatedAt = RefreshTokenParams.UpdatedAt
+	refreshTokenStruct.Email = data.Email
+	refreshTokenStruct.Token = tokenstr
+	refreshTokenStruct.RefreshToken = refreshToken
+
+	respondWithJSON(w, 200, refreshTokenStruct)
 }

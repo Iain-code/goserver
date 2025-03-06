@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -44,7 +46,6 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		Issuer:    "chirpy",
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	// After creating your token with jwt.NewWithClaims
 	signedToken, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {
@@ -98,4 +99,18 @@ func GetBearerToken(headers http.Header) (string, error) {
 	tkn := strings.TrimSpace(token_str[7:])
 
 	return tkn, nil
+}
+
+func MakeRefreshToken() (string, error) {
+
+	stuff := make([]byte, 32)
+	_, err := rand.Read(stuff)
+	if err != nil {
+		return "", err
+	}
+
+	hexStr := hex.EncodeToString(stuff)
+
+	return hexStr, nil
+
 }

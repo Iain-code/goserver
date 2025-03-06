@@ -21,19 +21,6 @@ type ApiConfig struct {
 
 func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 
-	type CreateChirp struct {
-		ID        uuid.UUID     `json:"id"`
-		CreatedAt time.Time     `json:"created_at"`
-		UpdatedAt time.Time     `json:"updated_at"`
-		Body      string        `json:"body"`
-		UserID    uuid.NullUUID `json:"user_id"`
-	}
-
-	type incPost struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
-	}
-
 	decoder := json.NewDecoder(r.Body)
 	post := incPost{}
 	err := decoder.Decode(&post)
