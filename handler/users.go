@@ -52,7 +52,6 @@ func (apiCfg *ApiConfig) NewUser(w http.ResponseWriter, r *http.Request) {
 	userStruct := &User{}
 	userStruct.ID = newUser.ID
 	userStruct.Email = newUser.Email
-	userStruct.HashedPassword = newUser.HashedPassword
 	// If using sql.NullTime
 	if newUser.CreatedAt.Valid {
 		userStruct.CreatedAt = newUser.CreatedAt.Time
@@ -145,4 +144,61 @@ func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 	refreshTokenStruct.RefreshToken = refreshToken
 
 	respondWithJSON(w, 200, refreshTokenStruct)
+}
+
+func (ApiCfg *ApiConfig) UpdateDetails(w http.ResponseWriter, r *http.Request) {
+
+	type UpdatePassEmail struct {
+		ID             uuid.UUID      `json:"id"`
+		Email          string         `json:"email"`
+		HashedPassword sql.NullString `json:"-"`
+	}
+
+	tkn, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "failed to get bearer token")
+		return
+	}
+	number, err := auth.ValidateJWT(tkn, ApiCfg.TokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
+	request := received{}
+
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&request)
+
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	hash, err := auth.HashPassword(request.Password)
+	if err != nil {
+		log.Printf("error while hashing password for user %v", request.Email)
+		return
+	}
+
+	updated := database.UpdatePassEmailParams{}
+	updated.ID = number
+	updated.Email = request.Email
+	updated.HashedPassword = sql.NullString{
+		String: hash,
+		Valid:  true,
+	}
+	err = ApiCfg.Db.UpdatePassEmail(r.Context(), updated)
+
+	rtn := UpdatePassEmail{}
+	rtn.Email = updated.Email
+	rtn.HashedPassword = updated.HashedPassword
+	rtn.ID = updated.ID
+
+	if err != nil {
+		respondWithError(w, 400, "failed to update user email or password")
+		return
+	}
+
+	respondWithJSON(w, 200, rtn)
 }

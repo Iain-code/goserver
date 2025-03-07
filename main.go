@@ -45,6 +45,9 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.NewUser)
 	mux.HandleFunc("POST /api/login", apiCfg.Login)
 	mux.HandleFunc("POST /api/refresh", apiCfg.Refresh)
+	mux.HandleFunc("POST /api/revoke", apiCfg.Revoke)
+	mux.HandleFunc("PUT /api/users", apiCfg.UpdateDetails)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.DeleteChirp)
 
 	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe()) // starts the server and will "listen" for http requests on given ports and return errors

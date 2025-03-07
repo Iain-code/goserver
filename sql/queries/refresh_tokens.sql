@@ -15,3 +15,12 @@ JOIN refresh_tokens ON users.id = refresh_tokens.user_id
 WHERE refresh_tokens.token = $1 
   AND refresh_tokens.revoked_at IS NULL 
   AND refresh_tokens.expires_at > NOW();
+
+-- name: GetRefreshToken :one
+SELECT * FROM refresh_tokens
+WHERE refresh_tokens.token = $1;
+
+-- name: RevokeRefreshToken :exec
+UPDATE refresh_tokens
+SET revoked_at = Now(), updated_at = Now()
+WHERE refresh_tokens.token = $1;

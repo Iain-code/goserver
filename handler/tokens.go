@@ -1,11 +1,22 @@
 package handler
 
 import (
-	"fmt"
+	"database/sql"
 	"goserver/internal/auth"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type RefreshTokenJSON struct {
+	Token     string       `json:"token"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
+	UserID    uuid.UUID    `json:"user_id"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
+}
 
 func (ApiCfg *ApiConfig) Refresh(w http.ResponseWriter, r *http.Request) {
 
@@ -13,7 +24,7 @@ func (ApiCfg *ApiConfig) Refresh(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	tkn, err := auth.GetBearerToken(r.Header)
-	fmt.Println(tkn)
+
 	if err != nil {
 		respondWithError(w, 401, "error collecting token")
 		return
@@ -30,5 +41,26 @@ func (ApiCfg *ApiConfig) Refresh(w http.ResponseWriter, r *http.Request) {
 	respToken.Token = token
 
 	respondWithJSON(w, 200, respToken)
+
+}
+
+func (ApiCfg *ApiConfig) Revoke(w http.ResponseWriter, r *http.Request) {
+
+	type empty struct{}
+	emp := empty{}
+
+	tkn, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "error collecting token")
+		return
+	}
+
+	err = ApiCfg.Db.RevokeRefreshToken(r.Context(), tkn)
+	if err != nil {
+		respondWithError(w, 401, "error collecting token")
+		return
+	}
+
+	respondWithJSON(w, 204, emp)
 
 }

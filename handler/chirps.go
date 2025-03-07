@@ -148,7 +148,7 @@ func (apiCfg *ApiConfig) GetOneChirp(w http.ResponseWriter, r *http.Request) {
 
 	chirp, err := apiCfg.Db.GetOneChirp(r.Context(), chirpID)
 	if err != nil {
-		respondWithError(w, 500, "error getting one chirp")
+		respondWithError(w, 404, "error getting one chirp")
 		return
 	}
 	newChirp := CreateChirp{}
@@ -158,5 +158,47 @@ func (apiCfg *ApiConfig) GetOneChirp(w http.ResponseWriter, r *http.Request) {
 	newChirp.Body = chirp.Body
 	newChirp.UserID = chirp.UserID
 	respondWithJSON(w, 200, newChirp)
+
+}
+
+func (ApiCfg *ApiConfig) DeleteChirp(w http.ResponseWriter, r *http.Request) {
+
+	tkn, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "failed to get bearer token")
+		return
+	}
+
+	number, err := auth.ValidateJWT(tkn, ApiCfg.TokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	chirpIDStr := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(chirpIDStr) // changes a string into a UUID
+	if err != nil {
+		// Handle invalid UUID format
+		http.Error(w, "Invalid chirp ID format", http.StatusBadRequest)
+		return
+	}
+	chirp, err := ApiCfg.Db.GetOneChirp(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, 404, "error getting one chirp")
+		return
+	}
+
+	// If chirp.UserID is a uuid.NullUUID and authenticatedUserID is a uuid.UUID
+	if !chirp.UserID.Valid || chirp.UserID.UUID != number {
+		// Return 403 Forbidden - either the user ID is not valid or not matching
+		respondWithError(w, 403, "userID not valid")
+		return
+	}
+	err = ApiCfg.Db.DeleteChirp(r.Context(), chirp.ID)
+	if err != nil {
+		respondWithError(w, 404, "chirp not found")
+		return
+	}
+
+	respondWithJSON(w, 204, "Chirp Deleted")
 
 }

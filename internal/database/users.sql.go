@@ -77,3 +77,20 @@ func (q *Queries) FindUserEmail(ctx context.Context, email string) (User, error)
 	)
 	return i, err
 }
+
+const updatePassEmail = `-- name: UpdatePassEmail :exec
+UPDATE users
+SET email = $2, hashed_password = $3
+WHERE users.id = $1
+`
+
+type UpdatePassEmailParams struct {
+	ID             uuid.UUID
+	Email          string
+	HashedPassword sql.NullString
+}
+
+func (q *Queries) UpdatePassEmail(ctx context.Context, arg UpdatePassEmailParams) error {
+	_, err := q.db.ExecContext(ctx, updatePassEmail, arg.ID, arg.Email, arg.HashedPassword)
+	return err
+}
