@@ -28,6 +28,7 @@ func main() {
 	apiCfg.Db = dbQueries
 	apiCfg.Platform = os.Getenv("PLATFORM")
 	apiCfg.TokenSecret = os.Getenv("TOKEN_SECRET")
+	apiCfg.PolkaKey = os.Getenv("POLKA_KEY")
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -48,6 +49,7 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", apiCfg.Revoke)
 	mux.HandleFunc("PUT /api/users", apiCfg.UpdateDetails)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.DeleteChirp)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.AddChirpyRed)
 
 	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe()) // starts the server and will "listen" for http requests on given ports and return errors

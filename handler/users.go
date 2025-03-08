@@ -80,6 +80,7 @@ func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		Email        string    `json:"email"`
 		Token        string    `json:"token"`
 		RefreshToken string    `json:"refresh_token"`
+		IsChirpyRed  bool      `json:"is_chirpy_red"`
 	}
 
 	receivedData := received{}
@@ -142,6 +143,7 @@ func (apiCfg *ApiConfig) Login(w http.ResponseWriter, r *http.Request) {
 	refreshTokenStruct.Email = data.Email
 	refreshTokenStruct.Token = tokenstr
 	refreshTokenStruct.RefreshToken = refreshToken
+	refreshTokenStruct.IsChirpyRed = data.IsChirpyRed
 
 	respondWithJSON(w, 200, refreshTokenStruct)
 }
@@ -201,4 +203,47 @@ func (ApiCfg *ApiConfig) UpdateDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, 200, rtn)
+}
+
+func (apiCfg *ApiConfig) AddChirpyRed(w http.ResponseWriter, r *http.Request) {
+
+	type Event struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+	event := Event{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&event)
+	if err != nil {
+		respondWithError(w, 401, "Invalid request body")
+	}
+	key, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "Invalid request body")
+		return
+	}
+
+	if key != apiCfg.PolkaKey {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+	if event.Event != "user.upgraded" {
+		respondWithError(w, 204, "")
+		return
+	}
+	num, err := uuid.Parse(event.Data.UserID)
+
+	if err != nil {
+		respondWithError(w, 400, "Bad Request")
+		return
+	}
+
+	err = apiCfg.Db.AddChirpyRed(r.Context(), num)
+	if err != nil {
+		respondWithError(w, 404, "Not Found")
+		return
+	}
+	respondWithJSON(w, 204, "")
 }

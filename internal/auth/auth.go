@@ -114,3 +114,19 @@ func MakeRefreshToken() (string, error) {
 	return hexStr, nil
 
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+
+	token_str := headers.Get("Authorization")
+
+	if token_str == "" {
+		return "", errors.New("invalid token")
+	}
+	if !strings.HasPrefix(token_str, "ApiKey ") {
+		return "", errors.New("invalid token")
+	}
+
+	key := strings.TrimSpace(token_str[7:])
+
+	return key, nil
+}

@@ -5,6 +5,7 @@ import (
 	"goserver/internal/auth"
 	"goserver/internal/database"
 	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,7 @@ type ApiConfig struct {
 	fileserverHits atomic.Int32
 	Platform       string
 	TokenSecret    string
+	PolkaKey       string
 }
 
 func (apiCfg *ApiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
@@ -100,12 +102,36 @@ func (apiCfg *ApiConfig) GetAllChirps(w http.ResponseWriter, r *http.Request) {
 		UserID    uuid.NullUUID `json:"user_id"`
 	}
 
-	chirps, err := apiCfg.Db.GetAllChirps(r.Context())
-	if err != nil {
-		respondWithError(w, 500, "get all chirps failed")
-		return
-	}
 	chirpSlice := []CreateChirp{}
+	s := r.URL.Query().Get("author_id")
+	chirps := []database.Chirp{}
+
+	if s == "" {
+		var err error
+		chirps, err = apiCfg.Db.GetAllChirps(r.Context())
+		if err != nil {
+			respondWithError(w, 500, "get all chirps failed")
+			return
+		}
+	} else {
+
+		var authorID uuid.NullUUID
+		num, err := uuid.Parse(s)
+		authorID.UUID = num
+		authorID.Valid = true
+
+		if err != nil {
+			respondWithError(w, 400, "Bad Request")
+			return
+		}
+
+		chirps, err = apiCfg.Db.GetAllChirpsFromUser(r.Context(), authorID)
+
+		if err != nil {
+			respondWithError(w, 500, "get all chirps failed")
+			return
+		}
+	}
 	for _, chirp := range chirps {
 		newChirp := CreateChirp{}
 		newChirp.ID = chirp.ID
@@ -114,6 +140,21 @@ func (apiCfg *ApiConfig) GetAllChirps(w http.ResponseWriter, r *http.Request) {
 		newChirp.Body = chirp.Body
 		newChirp.UserID = chirp.UserID
 		chirpSlice = append(chirpSlice, newChirp)
+	}
+
+	sortQuery := r.URL.Query().Get("sort")
+
+	if sortQuery == "asc" || sortQuery == "" {
+		sort.Slice(chirpSlice, func(i, j int) bool {
+			return chirpSlice[i].CreatedAt.Before(chirpSlice[j].CreatedAt)
+		})
+	} else {
+
+		if sortQuery == "desc" {
+			sort.Slice(chirpSlice, func(i, j int) bool {
+				return chirpSlice[i].CreatedAt.After(chirpSlice[j].CreatedAt)
+			})
+		}
 	}
 
 	data, err := json.Marshal(chirpSlice)

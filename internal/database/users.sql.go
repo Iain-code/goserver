@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const addChirpyRed = `-- name: AddChirpyRed :exec
+UPDATE users
+SET is_chirpy_red = true
+WHERE users.id = $1
+`
+
+func (q *Queries) AddChirpyRed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, addChirpyRed, id)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, email, hashed_password)
 VALUES(
@@ -21,7 +32,7 @@ VALUES(
     $4,
     $5
 )
-RETURNING id, created_at, updated_at, email, hashed_password
+RETURNING id, created_at, updated_at, email, hashed_password, is_chirpy_red
 `
 
 type CreateUserParams struct {
@@ -47,6 +58,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -61,7 +73,7 @@ func (q *Queries) DeleteAllUsers(ctx context.Context) error {
 }
 
 const findUserEmail = `-- name: FindUserEmail :one
-SELECT id, created_at, updated_at, email, hashed_password FROM users
+SELECT id, created_at, updated_at, email, hashed_password, is_chirpy_red FROM users
 WHERE email = $1
 `
 
@@ -74,6 +86,7 @@ func (q *Queries) FindUserEmail(ctx context.Context, email string) (User, error)
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
